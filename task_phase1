@@ -1,0 +1,50 @@
+# Phase 1: Backend Core — Task Tracker
+
+## Setup
+
+- [x] Create virtual environment & install dependencies
+- [x] Create `.env` and `.env.example`
+- [x] Create `app/config.py` (pydantic-settings)
+
+## Database Layer
+
+- [x] Create `app/database.py` (engine, session, Base)
+- [x] Create `app/models/user.py`
+- [x] Create `app/models/usage_log.py`
+- [x] Create `app/models/step.py`
+- [x] Create `app/models/expense.py`
+
+## Schemas
+
+- [x] Create `app/schemas/common.py` (API envelope)
+- [x] Create `app/schemas/auth.py`
+- [x] Create `app/schemas/usage_log.py`
+- [x] Create `app/schemas/step.py`
+- [x] Create `app/schemas/expense.py`
+
+## Auth & Services
+
+- [x] Create `app/services/auth_service.py` (JWT + bcrypt)
+- [x] Create `app/dependencies.py` (get_db, get_current_user)
+
+## Routers
+
+- [x] Create `app/routers/auth.py`
+- [x] Create `app/routers/usage.py`
+- [x] Create `app/routers/steps.py`
+- [x] Create `app/routers/expenses.py`
+
+## Middleware & App Entry
+
+- [x] Create `app/middleware/rate_limiter.py`
+- [x] Create `app/main.py`
+
+## Alembic
+
+- [x] Initialize Alembic & create initial migration
+- [x] Run migration to verify
+
+## Verification
+
+- [x] Server starts without errors
+- [x] Test endpoints via FastAPI docs

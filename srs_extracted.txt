@@ -1,0 +1,789 @@
+
+  
+Personal AI Life Analyzer
+Software Requirements Specification
+Version 1.0  ·  April 2026
+  
+
+Document Type
+Software Requirements Specification (SRS)
+Version
+1.0 — Initial Release
+Date
+April 26, 2026
+Status
+Draft — Under Review
+Classification
+Confidential — Internal Use Only
+
+Executive Summary
+The Personal AI Life Analyzer is a full-stack, privacy-first self-tracking platform that combines a native Android application, a Python-based AI backend, and an optional web dashboard. It collects behavioral data — screen time, step counts, and daily expenses — then applies a Retrieval-Augmented Generation (RAG) pipeline powered by a locally-running LLM (Ollama) to surface actionable insights, detect patterns, and answer natural-language questions about a user's lifestyle. All AI processing occurs on-premises, ensuring user data never leaves the device or local server.
+  
+
+  1.  Introduction
+
+1.1  Purpose
+This Software Requirements Specification describes the complete set of functional and non-functional requirements for the Personal AI Life Analyzer (PALA). It serves as the authoritative reference for all stakeholders — designers, developers, testers, and project owners — throughout the development lifecycle.
+The system is designed to:
+Continuously collect personal behavioral data including mobile screen usage, daily step counts, and expenditure records.
+Analyze behavioral patterns over configurable time windows using embedded AI models.
+Surface actionable insights, trend-based predictions, and prioritized recommendations through multiple interfaces.
+Preserve user privacy by performing all AI inference locally, without transmitting personal data to third-party cloud services.
+
+1.2  Scope
+PALA is composed of three integrated subsystems:
+Mobile Application (Android): Captures raw behavioral data using on-device sensors and APIs, stores it locally, and syncs it to the backend on a configurable schedule.
+Backend System: Exposes a RESTful API for data ingestion and retrieval, orchestrates the AI processing pipeline (embedding generation, vector search, LLM inference), and maintains the canonical data store.
+Web Dashboard (Optional): Provides a browser-based interface for visualizing trends, reading AI-generated summaries, and submitting natural-language queries.
+
+1.3  Definitions and Acronyms
+Term / Acronym
+Definition
+RAG
+Retrieval-Augmented Generation — a technique that combines dense vector retrieval with generative language modeling to ground responses in specific data.
+LLM
+Large Language Model — a neural network trained on large text corpora used here via Ollama for on-device inference.
+Embedding
+A fixed-length numerical vector encoding the semantic meaning of a text chunk, used for similarity search in FAISS.
+FAISS
+Facebook AI Similarity Search — an open-source library for efficient nearest-neighbor search over high-dimensional vectors.
+Ollama
+An open-source runtime for executing LLMs locally on consumer hardware with minimal configuration.
+JWT
+JSON Web Token — a compact, URL-safe means of representing authentication claims between parties.
+API
+Application Programming Interface — the RESTful HTTP interface used for client-backend communication.
+PALA
+Personal AI Life Analyzer — the system described by this document.
+DXA
+Document eXtended Attributes unit — used internally for this document's layout specifications.
+
+1.4  References
+IEEE Std 830-1998 — IEEE Recommended Practice for Software Requirements Specifications
+Android Developer Documentation — Background Work, UsageStatsManager, Step Counter Sensor API
+FastAPI Documentation — https://fastapi.tiangolo.com
+FAISS Library — https://github.com/facebookresearch/faiss
+Ollama Documentation — https://ollama.com/docs
+sentence-transformers Library — https://sbert.net
+
+  2.  Overall Description
+2.1  Product Perspective
+PALA operates as a self-contained, locally-deployed personal analytics platform. It does not integrate with external cloud services for AI processing. The system architecture follows a layered pattern:
+
+Android App (Data Collection Layer)
+       ↓  REST/HTTPS  (JWT Auth)
+Backend API (FastAPI · Python)
+   ↙ Data Store         ↘ AI Engine
+SQLite / PostgreSQL    FAISS + Ollama LLM
+       ↓  REST/HTTPS  (optional)
+Web Dashboard (React / Vanilla JS)
+
+2.2  User Classes and Characteristics
+User Class
+Description
+Technical Proficiency
+Primary User
+Individual using the system for personal productivity and self-improvement tracking
+Non-technical; comfortable with smartphone apps
+Administrator
+Developer or tester with access to backend configuration, model management, and system logs
+Highly technical; Python, Linux, AI/ML background
+
+2.3  Operating Environment
+Mobile: Android 8.0 (API Level 26) or higher; ARMv8 processor recommended; minimum 2 GB RAM.
+Backend Server: Linux (Ubuntu 20.04+) or Windows 10+; Python 3.10+; minimum 8 GB RAM; NVIDIA GPU optional but recommended for faster LLM inference.
+AI Runtime: Ollama v0.3+ with a supported model (e.g., Mistral 7B, Llama 3 8B); FAISS-CPU or FAISS-GPU.
+Web Dashboard: Any modern browser (Chrome 110+, Firefox 115+, Edge 110+); no special hardware required.
+
+2.4  Design Constraints
+All AI inference must run locally — no data may be sent to external cloud AI APIs.
+The mobile application must support offline data collection with deferred synchronization.
+Backend must be deployable on a single machine (laptop or home server) without orchestration infrastructure.
+Authentication must use industry-standard JWT tokens with configurable expiry.
+
+  3.  Mobile Application Requirements
+
+3.1  Functional Requirements
+
+3.1.1  User Authentication
+Req. ID
+Description
+Priority
+FR-M1
+User can register a new account with a unique email address and a password that meets strength requirements (min. 8 chars, 1 uppercase, 1 digit).
+High
+FR-M2
+User can log in using registered credentials and receive a JWT access token. The token must be stored securely in the Android Keystore. Refresh tokens must be supported.
+High
+FR-M3
+User can log out, which invalidates the local token and clears cached credentials.
+Medium
+FR-M4
+Failed login attempts exceeding 5 consecutive tries must trigger a 15-minute lockout with user notification.
+Medium
+
+3.1.2  App Usage Tracking
+Req. ID
+Description
+Priority
+FR-M5
+The app must track daily usage duration per installed application using the Android UsageStatsManager API. The user must grant PACKAGE_USAGE_STATS permission during onboarding.
+High
+FR-M6
+Usage data must record: app package name, human-readable app label, daily total time spent (seconds), and ISO 8601 timestamp.
+High
+FR-M7
+Usage data must be aggregated at day boundaries (midnight) and persisted to local SQLite storage.
+High
+FR-M8
+The app must sync usage data to the backend API at least once every 24 hours, or immediately upon reconnection after an offline period.
+Medium
+
+3.1.3  Step Tracking
+Req. ID
+Description
+Priority
+FR-M9
+The app must track daily step count using either (a) the Android TYPE_STEP_COUNTER hardware sensor, or (b) Google Fit API, based on device capability. The preferred source must be configurable in Settings.
+High
+FR-M10
+Step data must record: user_id, ISO 8601 date, integer step count. Steps must reset at midnight.
+High
+FR-M11
+The step tracking service must operate as a foreground service with a persistent notification to ensure accuracy and OS reliability.
+Medium
+
+3.1.4  Expense Logging
+Req. ID
+Description
+Priority
+FR-M12
+User can manually add an expense entry with: amount (decimal, max 10 digits), currency (ISO 4217), category (selectable from a predefined list + custom), optional description, and timestamp (defaults to current time, editable).
+High
+FR-M13
+User can edit any existing expense entry. All field changes must be recorded with an updated_at timestamp.
+High
+FR-M14
+User can delete an expense entry with a confirmation prompt. Deleted entries are soft-deleted (retained in DB with is_deleted flag) for 30 days before permanent removal.
+High
+FR-M15
+Predefined expense categories must include: Food & Dining, Transportation, Entertainment, Health, Shopping, Utilities, Education, and Other.
+Medium
+FR-M16
+The expense list must display current-month total and category breakdown as an inline summary.
+Low
+
+3.1.5  Offline Storage and Data Sync
+Req. ID
+Description
+Priority
+FR-M17
+All collected data (usage, steps, expenses) must be stored in a local SQLite database with schema versioning and migration support.
+High
+FR-M18
+Data sync must use an idempotent upsert strategy to prevent duplication during partial sync failures.
+High
+FR-M19
+The sync service must be implemented using Android WorkManager with exponential back-off retry on failure.
+Medium
+FR-M20
+Sync status (last synced timestamp, pending records count, error state) must be visible to the user in the Settings screen.
+Low
+
+3.2  Non-Functional Requirements
+Req. ID
+Description
+Priority
+NFR-M1
+Battery impact: background tracking services must consume less than 3% of total daily battery on a standard Android device.
+High
+NFR-M2
+All sensitive user data stored on-device must be encrypted at rest using AES-256 via Android EncryptedSharedPreferences or EncryptedFile APIs.
+High
+NFR-M3
+The application UI must remain responsive (< 100 ms frame render time) even when background sync is active.
+Medium
+NFR-M4
+The app must comply with Android Doze mode restrictions and not wake locks unnecessarily.
+Medium
+NFR-M5
+The app must support Android accessibility features including TalkBack screen reader and minimum 4.5:1 color contrast ratio.
+Low
+
+  4.  Backend System Requirements
+
+4.1  Functional Requirements
+
+4.1.1  REST API Layer
+The backend must expose a RESTful HTTP API built with FastAPI (Python). All endpoints must require JWT Bearer token authentication unless explicitly marked as public.
+Req. ID
+Description
+Priority
+FR-B1
+POST /auth/register and POST /auth/login endpoints must be publicly accessible and return JWT access and refresh tokens.
+High
+FR-B2
+CRUD endpoints for usage logs: POST /usage, GET /usage?date=&user_id=
+High
+FR-B3
+CRUD endpoints for step records: POST /steps, GET /steps?start=&end=
+High
+FR-B4
+CRUD endpoints for expenses: POST /expenses, GET /expenses, PUT /expenses/{id}, DELETE /expenses/{id}
+High
+FR-B5
+All API responses must follow a consistent envelope: {"success": bool, "data": object | array, "error": string | null}.
+High
+FR-B6
+API must return appropriate HTTP status codes (200, 201, 400, 401, 403, 404, 422, 500) and RFC 7807 Problem Details for errors.
+Medium
+
+4.1.2  Data Storage
+Req. ID
+Description
+Priority
+FR-B7
+Structured data must be stored in a relational database. SQLite is acceptable for development; PostgreSQL recommended for production.
+High
+FR-B8
+The database schema must implement foreign key constraints, unique indexes on (user_id, date) for steps, and cascading deletes where appropriate.
+High
+FR-B9
+All database migrations must be managed with Alembic, with each migration versioned and reversible.
+Medium
+
+4.1.3  AI Processing Engine — RAG Pipeline
+The AI engine implements a standard RAG pipeline: raw records are chunked into semantically coherent text snippets, converted to vector embeddings, stored in FAISS, and retrieved at query time to augment the LLM prompt.
+Req. ID
+Description
+Priority
+FR-B10
+A background scheduler must periodically convert new structured records into natural-language text chunks (e.g., "On 2026-04-20, you spent 3h 12m on Instagram.").
+High
+FR-B11
+Text chunks must be encoded into dense vector embeddings using the sentence-transformers library (model: all-MiniLM-L6-v2 or equivalent).
+High
+FR-B12
+Embeddings must be stored and indexed in a FAISS index (IndexFlatL2 or IndexIVFFlat for larger datasets). The index must persist to disk and reload on startup.
+High
+FR-B13
+At query time, the top-k (default k=5) most semantically similar chunks must be retrieved from FAISS.
+High
+FR-B14
+Retrieved chunks must be assembled into a structured prompt and submitted to Ollama's local inference API (/api/generate).
+High
+FR-B15
+The LLM model to use (e.g., mistral, llama3) must be configurable via an environment variable without code changes.
+Medium
+
+4.1.4  Insight & Pattern Detection Engine
+Req. ID
+Description
+Priority
+FR-B16
+The system must automatically detect high screen time events (daily total > configurable threshold, default 6 hours) and tag the record.
+High
+FR-B17
+The system must detect low physical activity days (step count < configurable threshold, default 5,000 steps) and flag them.
+High
+FR-B18
+The system must generate a daily summary narrative each morning at a configurable time (default 07:00 local time) covering the previous day's usage, steps, and expenses.
+High
+FR-B19
+The system must generate a weekly report every Monday covering the prior 7-day period with trend comparisons.
+Medium
+FR-B20
+The system must produce at least 3 prioritized recommendations per weekly report based on detected patterns (e.g., "Your step count dropped 40% on weekends — consider a weekend walk routine").
+Medium
+FR-B21
+Insights and summaries must be stored in the database and retrievable via GET /insights?type=daily|weekly&date=.
+Medium
+
+4.1.5  Natural Language Query Interface
+Req. ID
+Description
+Priority
+FR-B22
+POST /query endpoint must accept a JSON body {"question": string, "user_id": string} and return an AI-generated answer.
+High
+FR-B23
+Queries must be processed through the full RAG pipeline (embed → retrieve → generate) within the response time budget.
+High
+FR-B24
+Query history (question, answer, timestamp) must be stored per user and accessible via GET /query/history.
+Low
+
+4.2  Non-Functional Requirements
+Req. ID
+Description
+Priority
+NFR-B1
+API response time for data CRUD endpoints must be < 500 ms (p95). RAG query endpoints must respond within 5 seconds (p95) on the minimum hardware spec.
+High
+NFR-B2
+The backend architecture must allow horizontal scaling of the API layer (stateless design). The AI engine may remain a single-node service.
+Medium
+NFR-B3
+All API endpoints must be secured with HTTPS. Self-signed certificates are acceptable for local deployment; a Let's Encrypt certificate must be used for public-facing deployments.
+High
+NFR-B4
+Passwords must be hashed using bcrypt (cost factor ≥ 12). Plain-text passwords must never be logged or stored.
+High
+NFR-B5
+The system must produce structured application logs (JSON) at INFO level by default, with configurable DEBUG level for AI pipeline steps.
+Medium
+
+  5.  Web Dashboard Requirements  (Optional)
+The Web Dashboard is an optional frontend that provides a rich visual interface. Its absence does not impact core system functionality.
+
+5.1  Functional Requirements
+
+5.1.1  Data Visualization
+Req. ID
+Description
+Priority
+FR-W1
+Dashboard home must display a daily overview card showing: today's top apps by screen time (bar chart), step count progress vs. daily goal (ring chart), and total expenses vs. monthly budget.
+High
+FR-W2
+A "Screen Time" view must display a 7-day trend line chart with per-app breakdown and the ability to filter by app category.
+High
+FR-W3
+A "Steps" view must display a 30-day step count bar chart with a 7-day rolling average overlay and streak counter.
+Medium
+FR-W4
+An "Expenses" view must display a monthly pie chart by category and a day-by-day stacked bar chart for the current month.
+Medium
+FR-W5
+All charts must be interactive (hover for exact values, click to drill down), built using Chart.js or Recharts.
+Medium
+
+5.1.2  AI Insights Panel
+Req. ID
+Description
+Priority
+FR-W6
+An "Insights" section must display today's AI-generated daily summary with key statistics highlighted in bold.
+High
+FR-W7
+A "Weekly Report" tab must display the most recent weekly report with trend comparison vs. the previous week.
+Medium
+FR-W8
+Recommendations must be displayed as dismissible cards with a "Mark as actioned" state saved per user.
+Low
+
+5.1.3  Natural Language Query Interface
+Req. ID
+Description
+Priority
+FR-W9
+A chat-style interface must allow users to type natural-language questions (e.g., "Where do I waste the most time?", "How can I improve my productivity?") and display the AI's response.
+High
+FR-W10
+Suggested starter questions must be displayed when the query input is empty.
+Low
+FR-W11
+The query interface must display a loading indicator during the RAG inference period and stream the response token-by-token if the backend supports streaming.
+Medium
+
+5.2  Non-Functional Requirements
+Req. ID
+Description
+Priority
+NFR-W1
+The dashboard must be fully responsive from 320px (mobile) to 2560px (4K desktop) without horizontal scrolling.
+High
+NFR-W2
+Initial page load (LCP) must be < 2.5 seconds on a 10 Mbps connection. Chart data must load progressively.
+Medium
+NFR-W3
+The dashboard must achieve a Lighthouse accessibility score of ≥ 90.
+Low
+
+  6.  Database Design
+6.1  Entity Relationship Overview
+All entities share a common user_id foreign key referencing the Users table. Timestamps are stored in UTC ISO 8601 format.
+
+6.2  Table Schemas
+Users
+Column
+Type
+Constraints
+Notes
+id
+UUID
+PK, NOT NULL
+Auto-generated v4 UUID
+email
+VARCHAR(255)
+UNIQUE, NOT NULL
+Lowercased and trimmed on insert
+password_hash
+VARCHAR(255)
+NOT NULL
+bcrypt hash, cost factor ≥ 12
+created_at
+TIMESTAMPTZ
+NOT NULL, DEFAULT NOW()
+Account creation time (UTC)
+updated_at
+TIMESTAMPTZ
+NOT NULL
+Auto-updated on any change
+is_active
+BOOLEAN
+NOT NULL, DEFAULT TRUE
+Soft-disable without deletion
+
+Usage Logs
+Column
+Type
+Constraints
+Notes
+id
+BIGSERIAL
+PK, NOT NULL
+Auto-incrementing integer
+user_id
+UUID
+FK → Users.id, NOT NULL
+Cascades on user delete
+app_package
+VARCHAR(255)
+NOT NULL
+e.g. com.instagram.android
+app_label
+VARCHAR(255)
+NOT NULL
+Human-readable app name
+time_spent_sec
+INTEGER
+NOT NULL, ≥ 0
+Daily total in seconds
+recorded_date
+DATE
+NOT NULL
+UTC calendar date of usage
+synced_at
+TIMESTAMPTZ
+NOT NULL, DEFAULT NOW()
+When record arrived at server
+
+Steps
+Column
+Type
+Constraints
+Notes
+id
+BIGSERIAL
+PK, NOT NULL
+
+user_id
+UUID
+FK → Users.id, NOT NULL
+
+step_count
+INTEGER
+NOT NULL, ≥ 0
+Daily total steps
+step_date
+DATE
+NOT NULL
+UTC date
+source
+VARCHAR(50)
+NOT NULL
+sensor | google_fit
+synced_at
+TIMESTAMPTZ
+NOT NULL
+
+
+Expenses
+Column
+Type
+Constraints
+Notes
+id
+BIGSERIAL
+PK, NOT NULL
+
+user_id
+UUID
+FK → Users.id, NOT NULL
+
+amount
+NUMERIC(12,2)
+NOT NULL, > 0
+Up to 10 digits + 2 decimal
+currency
+CHAR(3)
+NOT NULL, DEFAULT 'INR'
+ISO 4217 code
+category
+VARCHAR(100)
+NOT NULL
+From predefined list or custom
+description
+TEXT
+NULLABLE
+Optional user note
+expense_at
+TIMESTAMPTZ
+NOT NULL
+User-specified time of expense
+created_at
+TIMESTAMPTZ
+NOT NULL, DEFAULT NOW()
+
+updated_at
+TIMESTAMPTZ
+NOT NULL
+
+is_deleted
+BOOLEAN
+NOT NULL, DEFAULT FALSE
+Soft delete; purged after 30d
+
+  7.  AI System Design
+7.1  Pipeline Architecture
+The AI pipeline follows a standard RAG architecture with additional scheduling and insight-generation layers:
+
+RAW DATA INGESTION
+  ↓  Text Chunking & Normalization
+EMBEDDING GENERATION  (sentence-transformers)
+  ↓  Index & Persist
+VECTOR STORE  (FAISS index, disk-persisted)
+  ↑  Query embedding     ↓  Top-k retrieval
+PROMPT ASSEMBLY  (context + user question)
+  ↓  Inference
+LLM OUTPUT via OLLAMA  →  API Response / Insight Store
+
+7.2  Component Specifications
+Component
+Technology
+Configuration
+Text Chunker
+Custom Python service
+Chunk size: 256 tokens; overlap: 32 tokens
+Embedding Model
+sentence-transformers
+Model: all-MiniLM-L6-v2; Output dim: 384
+Vector Database
+FAISS (faiss-cpu / faiss-gpu)
+IndexFlatL2 (< 100k vectors); IndexIVFFlat (> 100k)
+LLM Runtime
+Ollama
+Default model: mistral:7b; configurable via env var LLM_MODEL
+Scheduler
+APScheduler (Python)
+Embedding job: every 1 hour; Insight job: daily at 07:00
+Prompt Template
+Jinja2
+System + context + user question; max 3000 tokens total
+
+  8.  Security Requirements
+Req. ID
+Description
+Priority
+SEC-1
+All client-server communication must use TLS 1.2 or higher (HTTPS). Plaintext HTTP connections must be rejected or redirected.
+High
+SEC-2
+JWT access tokens must have a configurable expiry (default: 15 minutes). Refresh tokens must expire after 7 days and be rotated on each use.
+High
+SEC-3
+Passwords must be hashed with bcrypt (cost factor ≥ 12). No plaintext or reversibly-encrypted passwords may be stored or logged.
+High
+SEC-4
+All on-device sensitive data (tokens, user records) must be encrypted using AES-256 via Android Keystore.
+High
+SEC-5
+API endpoints must enforce rate limiting (max 60 requests/minute per user) to prevent brute-force attacks.
+Medium
+SEC-6
+The backend must validate and sanitize all input to prevent SQL injection, and use parameterized queries exclusively.
+High
+SEC-7
+All AI inference must execute locally (no data transmitted to external AI APIs). This requirement is non-negotiable.
+High
+SEC-8
+User data must be logically isolated — no user may access another user's data. This must be enforced at the database query level, not just the API layer.
+High
+
+  9.  Future Enhancements
+The following features are out of scope for the current release but are planned or candidates for future versions:
+
+#
+Feature
+Description
+Target Version
+1
+Predictive Analytics
+Time-series forecasting of screen time, steps, and expenses using LSTM or Prophet models.
+v2.0
+2
+Voice Assistant
+On-device speech-to-text (Whisper) enabling voice queries to the AI engine.
+v2.0
+3
+Wearable Integration
+Support for Wear OS smartwatches and fitness bands for passive step and heart-rate tracking.
+v2.1
+4
+Cross-Device Sync
+Encrypted end-to-end sync of user data across multiple devices via a self-hosted relay server.
+v2.1
+5
+Habit Tracker
+Goal setting and habit tracking module with streak notifications and calendar heatmaps.
+v2.2
+6
+iOS App
+Companion native iOS application using HealthKit for step data and Screen Time API for usage.
+v3.0
+7
+Multi-User Households
+Opt-in household mode allowing family members to share anonymized aggregate insights.
+v3.0
+
+  10.  Requirements Traceability Matrix
+The following matrix maps each functional requirement to its owning component and primary verification method.
+
+Req. ID
+Description (Summary)
+Component
+Verification
+FR-M1
+User registration
+Mobile App
+Unit + Integration Test
+FR-M2
+JWT token auth
+Mobile App
+Security Test
+FR-M5
+App usage tracking
+Mobile App
+System Test
+FR-M9
+Step tracking
+Mobile App
+System Test
+FR-M12
+Expense logging
+Mobile App
+Unit + UI Test
+FR-M17
+Offline SQLite storage
+Mobile App
+Integration Test
+FR-B1
+Auth endpoints
+Backend API
+API Contract Test
+FR-B2–4
+Data CRUD endpoints
+Backend API
+Integration Test
+FR-B10
+Text chunking
+AI Engine
+Unit Test
+FR-B11
+Embedding generation
+AI Engine
+Unit + Benchmark
+FR-B12
+FAISS indexing
+AI Engine
+Integration Test
+FR-B14
+Ollama LLM integration
+AI Engine
+Integration Test
+FR-B16–17
+Pattern detection
+AI Engine
+Unit Test
+FR-B18–19
+Insight generation
+AI Engine
+System Test
+FR-B22
+NL query endpoint
+Backend API
+End-to-End Test
+FR-W1
+Dashboard charts
+Web Dashboard
+UI/Visual Test
+FR-W9
+Query chat interface
+Web Dashboard
+End-to-End Test
+SEC-1
+HTTPS enforcement
+All
+Penetration Test
+SEC-7
+Local AI processing
+AI Engine
+Architecture Review
+
+  Appendix A:  Tech Stack Summary
+Layer
+Technology
+Rationale
+Mobile
+Kotlin (Android)
+Native performance; direct sensor API access
+Mobile Storage
+Room (SQLite wrapper)
+Type-safe ORM; migration support
+Mobile Sync
+WorkManager
+Battery-efficient background job scheduling
+Backend Language
+Python 3.10+
+Rich ML ecosystem; rapid API development
+Backend Framework
+FastAPI
+Async support; auto-generated OpenAPI docs
+Relational DB
+SQLite / PostgreSQL
+SQLite for dev; PostgreSQL for production
+DB Migrations
+Alembic
+Versioned, reversible schema migrations
+Embeddings
+sentence-transformers
+State-of-the-art semantic embeddings; local
+Vector DB
+FAISS
+High-performance similarity search; disk-persist
+LLM Runtime
+Ollama
+One-command local LLM deployment
+Scheduler
+APScheduler
+In-process job scheduling; cron support
+Authentication
+JWT (PyJWT + bcrypt)
+Stateless auth; industry standard
+Web Frontend
+React + Chart.js
+Component model; rich charting library
+
+  Appendix B:  Revision History
+Version
+Date
+Changes
+Author
+1.0
+2026-04-26
+Initial release. Full requirements for Mobile, Backend, AI Engine, Web Dashboard, Security, DB Schema, and Traceability Matrix.
+Project Team
+
+
+End of Document — Personal AI Life Analyzer SRS v1.0
