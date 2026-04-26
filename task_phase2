@@ -1,0 +1,61 @@
+# Phase 2: Android App — Task Tracker
+
+## Setup
+
+- [x] Create Android project structure
+- [x] Add Kotlin dependencies and build configuration
+- [x] Set backend base URL and environment config
+
+## Authentication
+
+- [x] Create register screen
+- [x] Create login screen
+- [x] Store JWT tokens securely
+- [ ] Add logout and session clear
+- [x] Add token refresh handling
+
+## Expenses
+
+- [ ] Create expense form UI
+- [ ] Create expense list UI
+- [ ] Add expense edit flow
+- [ ] Add expense delete flow
+- [ ] Sync expenses with backend
+
+## Steps
+
+- [ ] Add step data model
+- [ ] Implement step tracking source
+- [ ] Add foreground service for step tracking
+- [ ] Sync step records with backend
+
+## Usage
+
+- [ ] Request UsageStatsManager permission
+- [ ] Build usage aggregation logic
+- [ ] Store usage records locally
+- [ ] Sync usage records with backend
+
+## Offline Storage & Sync
+
+- [x] Add Room database
+- [ ] Add local migrations
+- [x] Implement WorkManager sync jobs
+- [ ] Handle retry and backoff
+- [ ] Prevent duplicate sync records
+
+## Settings
+
+- [ ] Add sync status screen
+- [ ] Add last sync timestamp
+- [ ] Add pending records count
+- [ ] Add tracking preferences
+
+## Verification
+
+- [ ] Register and login succeed against backend
+- [ ] Expense CRUD works end to end
+- [ ] Step sync works end to end
+- [ ] Usage sync works end to end
+- [ ] Offline queue and retry work
+- [ ] Postman/backend contract checks pass

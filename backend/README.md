@@ -418,7 +418,7 @@ Important: after refresh, update your stored environment variables with the new 
 
 ```json
 {
-  "amount": 250.50,
+  "amount": 250.5,
   "currency": "INR",
   "category": "Food & Dining",
   "description": "Lunch",
@@ -450,7 +450,7 @@ Save the returned `data.id` into `expense_id`.
 
 ```json
 {
-  "amount": 300.00,
+  "amount": 300.0,
   "description": "Lunch with tea"
 }
 ```
